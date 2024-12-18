@@ -9,6 +9,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
 ## positional encoding, is it worth?
@@ -272,13 +273,18 @@ class Encoder(nn.Module):
             ## by creating a positional embedding that we ADD to the input embedding.
             ## the input is inside a sinusoidal space or any other space.
 
-            if(self.pos_embedding == 'libro' ):
-                pass
-                sequence_idx = torch.arange(seq_length, device=input_sequence.device).expand(batch_size,seq_length,hidden).float()
+            if(self.pos_embedding.__class__.__name__ == 'PositionalEncoding'):
+                sequence_idx  = torch.arange(seq_length,  device=input_sequence.device).reshape(1,seq_length,1).expand(batch_size, seq_length, hidden).to(torch.float32)
+            
                 pos_emb = (
-                self.pos_embedding(sequence_idx)
+                    sequence_idx
+                )
+            #     sequence_idx = torch.arange(seq_length, device=input_sequence.device).expand(batch_size,seq_length,hidden).float()
+            #     pos_emb = (
+            #     self.pos_embedding(sequence_idx)
                 
-            )
+            # )
+                input_emb = input_emb + pos_emb
             else:
                 sequence_idx  = torch.arange(seq_length,  device=input_sequence.device).to(torch.float32)
             
@@ -328,6 +334,8 @@ class Decoder(nn.Module):
             ]
         )
 
+        self.sp = nn.Softplus()
+
         ## should it be a fully connected layer for output?
         self.fc_out = nn.Linear(hidden_size, number_of_tokens)
 
@@ -344,8 +352,8 @@ class Decoder(nn.Module):
 
         ## ADD positional information to embeddings.
         if self.pos_embedding is not None and self.pos_embedding !='libro':
-            if(self.pos_embedding == 'libro'):
-                pass
+            if(self.pos_embedding.__class__.__name__ == 'PositionalEncoding'):
+                
                 sequence_idx = torch.arange(seq_length, device=input_sequence.device).expand(batch_size,seq_length,h).float()
                 pos_emb = (
                     self.pos_embedding(sequence_idx)
@@ -373,8 +381,9 @@ class Decoder(nn.Module):
                 kv_cross=encoder_output,
             )
 
-        return self.fc_out(input_embeddings)
-
+        output = self.fc_out(input_embeddings)
+        output = self.sp(output)
+        return output
 
 class EncoderDecoderv1(nn.Module):
     def __init__(
